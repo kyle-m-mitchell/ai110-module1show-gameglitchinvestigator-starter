@@ -42,6 +42,24 @@ def test_guess_too_low():
 
 
 # ---------------------------------------------------------------------------
+# Backwards-hint bug: the hint must point the player the RIGHT way. A guess
+# that is too high should say "go lower", and too low should say "go higher".
+# The messages used to be inverted.
+# ---------------------------------------------------------------------------
+def test_hint_too_high_says_go_lower():
+    outcome, message = check_guess(80, 30)
+    assert outcome == "Too High"
+    assert "LOWER" in message.upper()
+    assert "HIGHER" not in message.upper()
+
+
+def test_hint_too_low_says_go_higher():
+    outcome, message = check_guess(10, 30)
+    assert outcome == "Too Low"
+    assert "HIGHER" in message.upper()
+
+
+# ---------------------------------------------------------------------------
 # G2 - the secret must be compared numerically, never as a string.
 # The old code turned the secret into a string every other turn, so check_guess
 # fell into a lexicographic comparison where, e.g., "9" > "50" is True and the
@@ -69,8 +87,9 @@ def test_g2_even_turn_secret_stays_numeric_end_to_end():
     # turns, when app.py used to stringify the secret and check_guess then
     # compared lexicographically. We pin the secret, burn one (odd) guess, then
     # on the second (even) guess submit a value that is numerically LOWER but
-    # lexically HIGHER than the secret. Old code -> "Go HIGHER" (wrong);
-    # fixed code -> "Go LOWER".
+    # lexically HIGHER than the secret. Correct numeric result -> Too Low ->
+    # "Go HIGHER"; the string bug would give Too High -> "Go LOWER", so the
+    # hint direction distinguishes the two.
     at = AppTest.from_file(APP).run()
     at.session_state["secret"] = 50
     at.run()
@@ -83,8 +102,8 @@ def test_g2_even_turn_secret_stays_numeric_end_to_end():
     at.text_input[0].set_value("9")
     next(b for b in at.button if b.label.startswith("Submit")).click().run()
 
-    assert "LOWER" in at.warning[0].value
-    assert "HIGHER" not in at.warning[0].value
+    assert "HIGHER" in at.warning[0].value
+    assert "LOWER" not in at.warning[0].value
 
 
 def test_g1_attempts_start_at_zero():

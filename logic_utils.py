@@ -91,11 +91,16 @@ def check_guess(guess, secret):
     # into that branch and producing wrong hints. HOW - that stringification
     # was removed in app.py, so the secret is always an int here; a plain
     # numeric comparison is now correct and the dead branch is gone.
+    # BUG FIX (backwards hints): WHAT - swapped the two hint messages. WHY - a
+    # guess that is too HIGH must tell the player to go LOWER (and vice versa),
+    # but the messages were inverted ("Too High" said "Go HIGHER!"), sending
+    # players the wrong way. HOW - pair each outcome with the correct
+    # direction word and arrow. (The outcome labels themselves were correct.)
     if guess == secret:
         return "Win", "🎉 Correct!"
     if guess > secret:
-        return "Too High", "📈 Go HIGHER!"
-    return "Too Low", "📉 Go LOWER!"
+        return "Too High", "📉 Go LOWER!"
+    return "Too Low", "📈 Go HIGHER!"
 
 
 def update_score(current_score: int, outcome: str, attempt_number: int):
