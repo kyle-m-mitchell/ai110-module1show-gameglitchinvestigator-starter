@@ -18,6 +18,33 @@ from logic_utils import (
 )
 
 
+def _render_chips(history, secret):
+    """ENHANCED UI: render Wordle-style colored guess chips.
+
+    Extracted into a helper so chips can be shown both during active play and
+    in the game-over state (before st.stop()), giving the player a full trail
+    to review after winning or losing.
+    """
+    if not history:
+        return
+    chips = []
+    for past_guess in history:
+        if past_guess == secret:
+            chip_class = "chip-win"
+        elif past_guess > secret:
+            chip_class = "chip-high"
+        else:
+            chip_class = "chip-low"
+        chips.append(
+            f'<span class="chip {chip_class}">{past_guess}</span>'
+        )
+    st.markdown("**Your guesses**")
+    st.markdown(
+        '<div class="chips">' + "".join(chips) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def reset_game(difficulty, low, high):
     """Reset all per-game session state to a fresh, playable game.
 
@@ -72,7 +99,11 @@ difficulty = st.sidebar.selectbox(
 attempt_limit_map = {
     "Easy": 6,
     "Normal": 8,
-    "Hard": 5,
+    # BUG FIX (B1): Hard was 5 attempts over range 1-50. Binary search needs
+    # ceil(log2(50))=6 steps, so the old limit made optimal play unwinnable.
+    # Now Hard is 1-1000 (needs ceil(log2(1000))=10 steps) with 10 attempts:
+    # perfect play can just barely win, which is genuinely hard.
+    "Hard": 10,
 }
 attempt_limit = attempt_limit_map[difficulty]
 
@@ -153,7 +184,13 @@ if new_game:
     st.success("New game started.")
     st.rerun()
 
+# BUG FIX (B6): WHAT - chips now render before st.stop() in the game-over
+# block. WHY - st.stop() halts script execution, so on any rerun after winning
+# or losing (e.g. just viewing the page) the chips block lower in the file
+# never ran, leaving the player with no guess trail to review. HOW - call
+# _render_chips here, before the stop, so history is always visible.
 if st.session_state.status != "playing":
+    _render_chips(st.session_state.history, st.session_state.secret)
     if st.session_state.status == "won":
         st.success("You already won. Start a new game to play again.")
     else:
@@ -170,6 +207,17 @@ if submit:
 
     if not ok:
         st.error(err)
+    # BUG FIX (B7): WHAT - duplicate guesses are now rejected before consuming
+    # an attempt. WHY - submitting the same number twice added it to history,
+    # incremented the attempt counter, and gave no feedback; on Hard (10
+    # attempts) even two duplicates meaningfully reduce remaining tries. HOW -
+    # check membership in history before any state mutation; a duplicate shows
+    # a warning and returns without touching attempts or history.
+    elif guess_int in st.session_state.history:
+        st.warning(
+            f"{guess_int} is already in your guess history. "
+            "Try a different number."
+        )
     else:
         st.session_state.attempts += 1
         st.session_state.history.append(guess_int)
@@ -180,7 +228,14 @@ if submit:
         # stringification was removed; the true secret is passed directly.
         outcome, message = check_guess(guess_int, st.session_state.secret)
 
-        if show_hint:
+        # BUG FIX (B4): suppress the hint on a win — "🎉 Correct!" was
+        # rendering in a yellow warning box, contradicting the success state.
+        # The balloons + st.success below already communicate the win clearly.
+        # BUG FIX (B5): suppress the hint on the final losing attempt — showing
+        # "Go Lower!" then immediately "Out of attempts!" is contradictory; the
+        # hint implies future guesses are possible when they are not.
+        is_game_over = st.session_state.attempts >= attempt_limit
+        if show_hint and outcome != "Win" and not is_game_over:
             st.warning(message)
 
         st.session_state.score = update_score(
@@ -205,28 +260,9 @@ if submit:
                     f"Score: {st.session_state.score}"
                 )
 
-# ENHANCED UI: Wordle-style history chips. Each past guess is shown as a
-# colored pill (red = too high, blue = too low, green = the winning guess),
-# giving instant visual feedback on the player's trail. Rendered after the
-# submit handler so it includes the guess just made.
-if st.session_state.history:
-    secret = st.session_state.secret
-    chips = []
-    for past_guess in st.session_state.history:
-        if past_guess == secret:
-            chip_class = "chip-win"
-        elif past_guess > secret:
-            chip_class = "chip-high"
-        else:
-            chip_class = "chip-low"
-        chips.append(
-            f'<span class="chip {chip_class}">{past_guess}</span>'
-        )
-    st.markdown("**Your guesses**")
-    st.markdown(
-        '<div class="chips">' + "".join(chips) + "</div>",
-        unsafe_allow_html=True,
-    )
+# ENHANCED UI: Wordle-style history chips — rendered via the shared helper so
+# chips also appear in the game-over block (B6 fix) without code duplication.
+_render_chips(st.session_state.history, st.session_state.secret)
 
 # FEATURE (Strategy Coach): a live readout of the still-feasible range, how
 # much of the search space is ruled out, and (opt-in) the best next guess.

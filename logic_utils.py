@@ -17,14 +17,18 @@ def get_range_for_difficulty(difficulty: str):
         A ``(low, high)`` tuple of ints describing the inclusive range the
         secret number is drawn from.
     """
-    # REFACTOR: moved from app.py unchanged. (Note: the Hard range is still a
-    # known design quirk, not yet addressed.)
+    # BUG FIX (B1): WHAT - Hard now returns (1, 1000) instead of (1, 50).
+    # WHY - 1-50 is narrower than Normal's 1-100, making Hard accidentally
+    # easier; worse, binary search needs ceil(log2(50))=6 steps but Hard only
+    # gave 5 attempts, so optimal play could never win. HOW - widen Hard to
+    # 1-1000 (needs ceil(log2(1000))=10 steps) and set its attempt limit to 10
+    # in app.py so perfect play can just barely win — a genuinely hard game.
     if difficulty == "Easy":
         return 1, 20
     if difficulty == "Normal":
         return 1, 100
     if difficulty == "Hard":
-        return 1, 50
+        return 1, 1000
     return 1, 100
 
 
@@ -116,21 +120,24 @@ def update_score(current_score: int, outcome: str, attempt_number: int):
         The updated integer score. An unrecognized ``outcome`` leaves the
         score unchanged.
     """
-    # REFACTOR: moved from app.py unchanged. (Note: the win formula and the
-    # asymmetric "Too High" scoring remain known design quirks, not yet
-    # addressed.)
+    # BUG FIX (B2): WHAT - win formula changed from (attempt_number + 1) to
+    # (attempt_number - 1). WHY - attempt_number is already 1-based, so + 1
+    # added a phantom deduction: guessing correctly on try 1 gave 80 points
+    # instead of 100. HOW - subtract one fewer step so attempt 1 scores 100,
+    # attempt 2 scores 90, ..., attempt 10+ scores the 10-point floor.
     if outcome == "Win":
-        points = 100 - 10 * (attempt_number + 1)
+        points = 100 - 10 * (attempt_number - 1)
         if points < 10:
             points = 10
         return current_score + points
 
-    if outcome == "Too High":
-        if attempt_number % 2 == 0:
-            return current_score + 5
-        return current_score - 5
-
-    if outcome == "Too Low":
+    # BUG FIX (B3): WHAT - removed the parity branch that awarded +5 on even
+    # attempts for "Too High". WHY - the reward was invisible to players
+    # (depends on turn parity, not skill) and created an asymmetry where "Too
+    # High" was sometimes rewarded while "Too Low" was always penalized. HOW -
+    # both wrong-direction outcomes now apply the same -5 penalty, making
+    # scoring symmetric and predictable.
+    if outcome in ("Too High", "Too Low"):
         return current_score - 5
 
     return current_score

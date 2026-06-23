@@ -20,6 +20,7 @@ from logic_utils import (
     optimal_guess,
     parse_guess,
     remaining_count,
+    update_score,
 )
 
 # conftest.py at the repo root puts the root on sys.path, so the imports above
@@ -129,6 +130,26 @@ def test_g4_info_text_matches_difficulty_range():
     at.selectbox[0].set_value("Easy").run()
     assert "between 1 and 20" in at.info[0].value
     assert "between 1 and 100" not in at.info[0].value
+
+
+def test_hard_difficulty_has_larger_range_than_normal():
+    # Balance regression: Hard used to be 1-50, which made it a smaller search
+    # space than Normal's 1-100 range.
+    easy_low, easy_high = get_range_for_difficulty("Easy")
+    normal_low, normal_high = get_range_for_difficulty("Normal")
+    hard_low, hard_high = get_range_for_difficulty("Hard")
+
+    easy_size = easy_high - easy_low + 1
+    normal_size = normal_high - normal_low + 1
+    hard_size = hard_high - hard_low + 1
+
+    assert easy_size < normal_size < hard_size
+
+
+def test_hard_difficulty_banner_shows_expanded_range():
+    at = AppTest.from_file(APP).run()
+    at.selectbox[0].set_value("Hard").run()
+    assert "between 1 and 1000" in at.info[0].value
 
 
 def test_g3_new_game_resets_all_state():
@@ -303,3 +324,87 @@ def test_coach_panel_shows_narrowed_range_after_guesses():
     assert "26" in metrics["Possible range"]
     assert "49" in metrics["Possible range"]
     assert metrics["Numbers left"] == "24"
+
+
+# ===========================================================================
+# B1 — Hard difficulty range and attempt limit
+# ===========================================================================
+def test_b1_hard_range_is_wider_than_normal():
+    low_h, high_h = get_range_for_difficulty("Hard")
+    low_n, high_n = get_range_for_difficulty("Normal")
+    assert (high_h - low_h) > (high_n - low_n), (
+        "Hard must have a wider range than Normal"
+    )
+
+
+def test_b1_hard_range_is_1_to_1000():
+    assert get_range_for_difficulty("Hard") == (1, 1000)
+
+
+# ===========================================================================
+# B2 / B3 — update_score: win formula and symmetric wrong-guess penalty
+# ===========================================================================
+def test_b2_win_attempt_1_scores_100():
+    # First-guess win: 100 - 10*(1-1) = 100. Old formula gave 80.
+    assert update_score(0, "Win", 1) == 100
+
+
+def test_b2_win_attempt_2_scores_90():
+    assert update_score(0, "Win", 2) == 90
+
+
+def test_b2_win_attempt_10_scores_10():
+    # At the cap boundary: 100 - 10*(10-1) = 10.
+    assert update_score(0, "Win", 10) == 10
+
+
+def test_b2_win_attempt_11_is_capped_at_10():
+    # Beyond the cap: 100 - 10*(11-1) = 0, floored to 10.
+    assert update_score(0, "Win", 11) == 10
+
+
+def test_b2_win_adds_to_existing_score():
+    assert update_score(50, "Win", 1) == 150
+
+
+def test_b3_too_high_always_subtracts_5():
+    # No parity — both even and odd attempts cost -5.
+    assert update_score(100, "Too High", 1) == 95
+    assert update_score(100, "Too High", 2) == 95
+    assert update_score(100, "Too High", 3) == 95
+
+
+def test_b3_too_low_always_subtracts_5():
+    assert update_score(100, "Too Low", 1) == 95
+    assert update_score(100, "Too Low", 2) == 95
+
+
+def test_b3_wrong_guesses_are_symmetric():
+    # "Too High" and "Too Low" must produce identical score changes.
+    score_high = update_score(100, "Too High", 1)
+    score_low = update_score(100, "Too Low", 1)
+    assert score_high == score_low
+
+
+def test_update_score_unknown_outcome_unchanged():
+    assert update_score(42, "Unknown", 1) == 42
+
+
+# ===========================================================================
+# B7 — duplicate guesses must not consume an attempt
+# ===========================================================================
+def test_b7_duplicate_guess_does_not_consume_attempt():
+    at = AppTest.from_file(APP).run()
+    at.session_state["secret"] = 50
+    at.run()
+
+    # First submission: valid, consumes attempt 1.
+    at.text_input[0].set_value("30")
+    next(b for b in at.button if b.label.startswith("Submit")).click().run()
+    assert at.session_state["attempts"] == 1
+
+    # Second submission of the same number: must NOT consume attempt 2.
+    at.text_input[0].set_value("30")
+    next(b for b in at.button if b.label.startswith("Submit")).click().run()
+    assert at.session_state["attempts"] == 1
+    assert at.session_state["history"].count(30) == 1
