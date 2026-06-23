@@ -13,7 +13,14 @@ import os
 
 from streamlit.testing.v1 import AppTest
 
-from logic_utils import check_guess, get_range_for_difficulty, parse_guess
+from logic_utils import (
+    check_guess,
+    get_range_for_difficulty,
+    narrow_range,
+    optimal_guess,
+    parse_guess,
+    remaining_count,
+)
 
 # conftest.py at the repo root puts the root on sys.path, so the imports above
 # resolve regardless of how pytest is launched.
@@ -233,3 +240,66 @@ def test_ec_difficulty_change_regenerates_secret_in_range():
     assert low <= at.session_state["secret"] <= high
     assert at.session_state["attempts"] == 0
     assert at.session_state["status"] == "playing"
+
+
+# ===========================================================================
+# FEATURE: STRATEGY COACH
+# narrow_range / remaining_count / optimal_guess are pure, so they get fast
+# unit tests; the panel itself gets one end-to-end AppTest.
+# ===========================================================================
+def test_coach_no_guesses_gives_full_range():
+    assert narrow_range([], 50, 1, 100) == (1, 100)
+
+
+def test_coach_too_high_guess_lowers_upper_bound():
+    # 80 > 30 -> upper bound drops to 79.
+    assert narrow_range([80], 30, 1, 100) == (1, 79)
+
+
+def test_coach_too_low_guess_raises_lower_bound():
+    # 10 < 30 -> lower bound rises to 11.
+    assert narrow_range([10], 30, 1, 100) == (11, 100)
+
+
+def test_coach_combined_guesses_narrow_both_bounds():
+    # 50 too high -> hi=49; 25 too low -> lo=26.
+    assert narrow_range([50, 25], 30, 1, 100) == (26, 49)
+
+
+def test_coach_correct_guess_collapses_range():
+    assert narrow_range([42, 50, 42], 42, 1, 100) == (42, 42)
+
+
+def test_coach_range_always_contains_secret():
+    # The core invariant: no sequence of guesses can exclude the secret.
+    secret = 37
+    lo, hi = narrow_range([50, 20, 40, 30, 35], secret, 1, 100)
+    assert lo <= secret <= hi
+
+
+def test_coach_remaining_count():
+    assert remaining_count(26, 49) == 24
+    assert remaining_count(42, 42) == 1
+    assert remaining_count(50, 49) == 0  # empty range guards to 0
+
+
+def test_coach_optimal_guess_is_midpoint():
+    assert optimal_guess(1, 100) == 50
+    assert optimal_guess(26, 49) == 37
+
+
+def test_coach_panel_shows_narrowed_range_after_guesses():
+    at = AppTest.from_file(APP).run()
+    at.session_state["secret"] = 30
+    at.run()
+
+    # 50 (too high) then 25 (too low) -> feasible range 26-49, 24 numbers left.
+    at.text_input[0].set_value("50")
+    next(b for b in at.button if b.label.startswith("Submit")).click().run()
+    at.text_input[0].set_value("25")
+    next(b for b in at.button if b.label.startswith("Submit")).click().run()
+
+    metrics = {m.label: str(m.value) for m in at.metric}
+    assert "26" in metrics["Possible range"]
+    assert "49" in metrics["Possible range"]
+    assert metrics["Numbers left"] == "24"

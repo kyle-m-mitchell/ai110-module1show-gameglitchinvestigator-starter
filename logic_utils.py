@@ -134,3 +134,71 @@ def update_score(current_score: int, outcome: str, attempt_number: int):
         return current_score - 5
 
     return current_score
+
+
+def narrow_range(guesses, secret, low, high):
+    """Return the range of values still consistent with the guesses so far.
+
+    FEATURE (Strategy Coach): given the player's past guesses and the secret,
+    this reconstructs the ``(lo, hi)`` window a player following the
+    higher/lower hints would have deduced. A guess below the secret raises the
+    lower bound; a guess above it lowers the upper bound; the exact guess
+    collapses the window to that single value.
+
+    Because the secret always lies inside ``[low, high]`` and each bound only
+    moves toward (never past) the secret, the returned range always satisfies
+    ``lo <= secret <= hi`` and can never become empty.
+
+    Args:
+        guesses: Iterable of integer guesses made this game (e.g. the
+            ``history`` list).
+        secret: The secret integer being guessed.
+        low: Inclusive lower bound of the full difficulty range.
+        high: Inclusive upper bound of the full difficulty range.
+
+    Returns:
+        A ``(lo, hi)`` tuple of ints describing the still-feasible inclusive
+        range.
+    """
+    lo, hi = low, high
+    for guess in guesses:
+        if guess == secret:
+            return guess, guess
+        if guess < secret:
+            lo = max(lo, guess + 1)
+        else:
+            hi = min(hi, guess - 1)
+    return lo, hi
+
+
+def remaining_count(lo, hi):
+    """Return how many integers remain in an inclusive ``[lo, hi]`` range.
+
+    FEATURE (Strategy Coach): drives the "numbers left" metric and the
+    proportion of the search space ruled out.
+
+    Args:
+        lo: Inclusive lower bound.
+        hi: Inclusive upper bound.
+
+    Returns:
+        The count of integers in ``[lo, hi]``, or 0 if the range is empty.
+    """
+    return max(0, hi - lo + 1)
+
+
+def optimal_guess(lo, hi):
+    """Return the guess that best halves an inclusive ``[lo, hi]`` range.
+
+    FEATURE (Strategy Coach): the midpoint is the binary-search choice that
+    minimizes the worst-case number of possibilities remaining after the
+    guess.
+
+    Args:
+        lo: Inclusive lower bound of the still-feasible range.
+        hi: Inclusive upper bound of the still-feasible range.
+
+    Returns:
+        The midpoint integer ``(lo + hi) // 2``.
+    """
+    return (lo + hi) // 2

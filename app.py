@@ -9,7 +9,10 @@ import streamlit as st
 from logic_utils import (
     check_guess,
     get_range_for_difficulty,
+    narrow_range,
+    optimal_guess,
     parse_guess,
+    remaining_count,
     update_score,
 )
 
@@ -61,6 +64,17 @@ low, high = get_range_for_difficulty(difficulty)
 
 st.sidebar.caption(f"Range: {low} to {high}")
 st.sidebar.caption(f"Attempts allowed: {attempt_limit}")
+
+# FEATURE (Strategy Coach): toggles for the live strategy readout. The coach is
+# on by default; the explicit optimal-guess suggestion is a separate opt-in so
+# it doesn't trivialize the game. The second box only appears when the coach is
+# on, so there is never a dangling control.
+coach_on = st.sidebar.checkbox("🧭 Strategy Coach", value=True)
+show_optimal = (
+    st.sidebar.checkbox("Show optimal next guess", value=False)
+    if coach_on
+    else False
+)
 
 # BUG FIX (G1): WHAT - attempts now start at 0 (they used to start at 1).
 # WHY - starting at 1 made "Attempts left" off by one, stole a guess via the
@@ -174,6 +188,29 @@ if submit:
                     f"The secret was {st.session_state.secret}. "
                     f"Score: {st.session_state.score}"
                 )
+
+# FEATURE (Strategy Coach): a live readout of the still-feasible range, how
+# much of the search space is ruled out, and (opt-in) the best next guess.
+# Rendered after the submit handler so it reflects the latest guess, and only
+# while the game is in progress so it disappears on win/loss. Derived purely
+# from existing state (history + secret + range), so it cannot desync.
+if coach_on and st.session_state.status == "playing":
+    lo, hi = narrow_range(
+        st.session_state.history, st.session_state.secret, low, high
+    )
+    count = remaining_count(lo, hi)
+    total = high - low + 1
+    ruled_out = round((1 - count / total) * 100)
+
+    st.subheader("🧭 Strategy Coach")
+    coach_col1, coach_col2 = st.columns(2)
+    coach_col1.metric("Possible range", f"{lo}–{hi}")
+    coach_col2.metric("Numbers left", count)
+    st.progress(1 - count / total)
+    st.caption(f"{ruled_out}% of the range ruled out.")
+
+    if show_optimal:
+        st.info(f"Optimal next guess: {optimal_guess(lo, hi)}")
 
 st.divider()
 st.caption("Built by an AI that claims this code is production-ready.")
