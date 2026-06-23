@@ -1,5 +1,7 @@
 # 💭 Reflection: Game Glitch Investigator
 
+## Completed by Kyle M. Mitchell
+
 Answer each question in 3 to 5 sentences. Be specific and honest about what actually happened while you worked. This is about your process, not trying to sound perfect.
 
 ## 1. What was broken when you started?
