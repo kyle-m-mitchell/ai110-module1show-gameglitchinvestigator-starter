@@ -1,0 +1,10 @@
+# Uniform palette for the Game Glitch Investigator UI.
+# An indigo/violet primary with a soft lavender background; semantic
+# colors (too-high/too-low/win) live in style.css.
+[theme]
+base = "light"
+primaryColor = "#6C5CE7"
+backgroundColor = "#FBFAFF"
+secondaryBackgroundColor = "#F0ECFF"
+textColor = "#2D3436"
+font = "sans serif"

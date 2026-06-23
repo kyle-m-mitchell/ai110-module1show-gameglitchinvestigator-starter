@@ -1,3 +1,4 @@
+import os
 import random
 
 import streamlit as st
@@ -42,8 +43,23 @@ def reset_game(difficulty, low, high):
 
 st.set_page_config(page_title="Glitchy Guesser", page_icon="🎮")
 
-st.title("🎮 Game Glitch Investigator")
-st.caption("An AI-generated guessing game. Something is off.")
+# ENHANCED UI: load the custom palette/CSS layer (kept in a separate file so
+# app.py stays PEP 8 clean). Pathed off this file so it resolves no matter the
+# working directory.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(_HERE, "style.css")) as _css:
+    st.markdown(f"<style>{_css.read()}</style>", unsafe_allow_html=True)
+
+# ENHANCED UI: gradient hero header in place of the plain title/caption.
+st.markdown(
+    """
+<div class="hero">
+  <h1>🎮 Game Glitch Investigator</h1>
+  <p>Crack the secret number. Outsmart the machine.</p>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
 st.sidebar.header("Settings")
 
@@ -189,6 +205,29 @@ if submit:
                     f"Score: {st.session_state.score}"
                 )
 
+# ENHANCED UI: Wordle-style history chips. Each past guess is shown as a
+# colored pill (red = too high, blue = too low, green = the winning guess),
+# giving instant visual feedback on the player's trail. Rendered after the
+# submit handler so it includes the guess just made.
+if st.session_state.history:
+    secret = st.session_state.secret
+    chips = []
+    for past_guess in st.session_state.history:
+        if past_guess == secret:
+            chip_class = "chip-win"
+        elif past_guess > secret:
+            chip_class = "chip-high"
+        else:
+            chip_class = "chip-low"
+        chips.append(
+            f'<span class="chip {chip_class}">{past_guess}</span>'
+        )
+    st.markdown("**Your guesses**")
+    st.markdown(
+        '<div class="chips">' + "".join(chips) + "</div>",
+        unsafe_allow_html=True,
+    )
+
 # FEATURE (Strategy Coach): a live readout of the still-feasible range, how
 # much of the search space is ruled out, and (opt-in) the best next guess.
 # Rendered after the submit handler so it reflects the latest guess, and only
@@ -213,4 +252,9 @@ if coach_on and st.session_state.status == "playing":
         st.info(f"Optimal next guess: {optimal_guess(lo, hi)}")
 
 st.divider()
-st.caption("Built by an AI that claims this code is production-ready.")
+# ENHANCED UI: styled footer.
+st.markdown(
+    '<div class="app-footer">Built by an AI that claimed this code was '
+    "production-ready — debugged, tested, and redesigned by a human.</div>",
+    unsafe_allow_html=True,
+)
