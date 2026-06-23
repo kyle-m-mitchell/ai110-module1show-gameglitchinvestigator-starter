@@ -1,6 +1,24 @@
+"""Pure game logic for the Game Glitch Investigator guessing game.
+
+REFACTOR: these four functions were extracted verbatim from app.py so the
+game's logic can be unit-tested without launching Streamlit and so app.py is
+left with only its UI/flow concerns.
+"""
+
+
 def get_range_for_difficulty(difficulty: str):
-    """Return (low, high) inclusive range for a given difficulty."""
-    # FIX - Refactored logic manually from app.py using Claude's guidance and suggestions
+    """Return the inclusive guessing range for a difficulty level.
+
+    Args:
+        difficulty: One of ``"Easy"``, ``"Normal"``, or ``"Hard"``. Any
+            unrecognized value falls back to the Normal range.
+
+    Returns:
+        A ``(low, high)`` tuple of ints describing the inclusive range the
+        secret number is drawn from.
+    """
+    # REFACTOR: moved from app.py unchanged. (Note: the Hard range is still a
+    # known design quirk, not yet addressed.)
     if difficulty == "Easy":
         return 1, 20
     if difficulty == "Normal":
@@ -10,13 +28,31 @@ def get_range_for_difficulty(difficulty: str):
     return 1, 100
 
 
-def parse_guess(raw: str):
-    """
-    Parse user input into an int guess.
+def parse_guess(raw: str, low: int | None = None, high: int | None = None):
+    """Parse raw user input into a validated integer guess.
 
-    Returns: (ok: bool, guess_int: int | None, error_message: str | None)
+    Numeric text is converted to an int (decimals are truncated, e.g.
+    ``"3.9"`` -> ``3``). When both ``low`` and ``high`` are supplied, the
+    parsed value must fall within the inclusive range or it is rejected.
+
+    Args:
+        raw: The raw text entered by the player. May be ``None`` or empty.
+        low: Optional inclusive lower bound for range validation.
+        high: Optional inclusive upper bound for range validation.
+
+    Returns:
+        A ``(ok, guess, error)`` tuple where:
+            * ``ok`` (bool): True if the input is a valid, in-range integer.
+            * ``guess`` (int | None): the parsed int when ``ok`` is True,
+              otherwise None.
+            * ``error`` (str | None): a user-facing message when ``ok`` is
+              False, otherwise None.
     """
-    # FIX - Refactored logic manually from app.py using Claude's guidance and suggestions
+    # BUG FIX (edge case 2): WHAT - reject numbers outside the active range.
+    # WHY - the UI promises "a number between low and high", but the parser
+    # previously accepted any integer (e.g. -5, 0, 999), violating that
+    # contract and letting players waste turns on impossible guesses.
+    # HOW - validate against the optional low/high bounds before returning ok.
     if raw is None:
         return False, None, "Enter a guess."
 
@@ -31,36 +67,53 @@ def parse_guess(raw: str):
     except Exception:
         return False, None, "That is not a number."
 
+    if low is not None and high is not None and not (low <= value <= high):
+        return False, None, f"Guess must be between {low} and {high}."
+
     return True, value, None
 
 
 def check_guess(guess, secret):
-    """
-    Compare guess to secret and return (outcome, message).
+    """Compare a guess against the secret number.
 
-    outcome examples: "Win", "Too High", "Too Low"
+    Args:
+        guess: The player's integer guess.
+        secret: The secret integer to compare against.
+
+    Returns:
+        An ``(outcome, message)`` tuple. ``outcome`` is one of ``"Win"``,
+        ``"Too High"``, or ``"Too Low"``; ``message`` is the matching
+        user-facing hint string.
     """
-    # FIX - Refactored logic manually from app.py using Claude's guidance and suggestions
+    # BUG FIX (G2): WHAT - removed a try/except TypeError fallback that did
+    # lexicographic string comparison (so "9" > "50" wrongly read as "higher").
+    # WHY - app.py used to stringify the secret on every other turn, dropping
+    # into that branch and producing wrong hints. HOW - that stringification
+    # was removed in app.py, so the secret is always an int here; a plain
+    # numeric comparison is now correct and the dead branch is gone.
     if guess == secret:
         return "Win", "🎉 Correct!"
-    # FIX - removed unnecessary logic comparing strings to integer, and string to integer conversion
-    #try:
-    #    if guess > secret:
-    #        return "Too High", "📈 Go HIGHER!"
-    #    else:
-    #        return "Too Low", "📉 Go LOWER!"
-    #except TypeError:
-    #    g = str(guess)
-    #    if g == secret:
-    #        return "Win", "🎉 Correct!"
     if guess > secret:
         return "Too High", "📈 Go HIGHER!"
     return "Too Low", "📉 Go LOWER!"
 
 
 def update_score(current_score: int, outcome: str, attempt_number: int):
-    """Update score based on outcome and attempt number."""
-    # FIX - Refactored logic manually from app.py using Claude's guidance and suggestions
+    """Return the new score after applying the result of one guess.
+
+    Args:
+        current_score: The score before this guess.
+        outcome: The result from :func:`check_guess` (``"Win"``,
+            ``"Too High"``, or ``"Too Low"``).
+        attempt_number: The 1-based count of guesses taken so far.
+
+    Returns:
+        The updated integer score. An unrecognized ``outcome`` leaves the
+        score unchanged.
+    """
+    # REFACTOR: moved from app.py unchanged. (Note: the win formula and the
+    # asymmetric "Too High" scoring remain known design quirks, not yet
+    # addressed.)
     if outcome == "Win":
         points = 100 - 10 * (attempt_number + 1)
         if points < 10:
@@ -76,4 +129,3 @@ def update_score(current_score: int, outcome: str, attempt_number: int):
         return current_score - 5
 
     return current_score
-

@@ -10,17 +10,14 @@ Streamlit-flow bugs (G1, G3, G4) live in app.py and are exercised with
 Streamlit's AppTest harness, which runs the whole app headlessly.
 """
 import os
-import sys
 
-# Make the repo root importable no matter where pytest is invoked from, so that
-# both `import logic_utils` here and app.py's own `from logic_utils import ...`
-# resolve correctly.
+from streamlit.testing.v1 import AppTest
+
+from logic_utils import check_guess, get_range_for_difficulty, parse_guess
+
+# conftest.py at the repo root puts the root on sys.path, so the imports above
+# resolve regardless of how pytest is launched.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
-
-from logic_utils import check_guess, get_range_for_difficulty
-
 APP = os.path.join(ROOT, "app.py")
 
 
@@ -53,13 +50,13 @@ def test_guess_too_low():
 # ever returns.
 # ---------------------------------------------------------------------------
 def test_g2_single_digit_guess_below_two_digit_secret():
-    # 9 < 50 numerically -> Too Low.  ("9" > "50" lexicographically -> Too High)
+    # 9 < 50 numerically -> Too Low ("9" > "50" as text -> Too High).
     outcome, _ = check_guess(9, 50)
     assert outcome == "Too Low"
 
 
 def test_g2_three_digit_guess_above_two_digit_secret():
-    # 100 > 20 numerically -> Too High.  ("100" < "20" lexicographically -> Too Low)
+    # 100 > 20 numerically -> Too High ("100" < "20" as text -> Too Low).
     outcome, _ = check_guess(100, 20)
     assert outcome == "Too High"
 
@@ -67,25 +64,22 @@ def test_g2_three_digit_guess_above_two_digit_secret():
 # ---------------------------------------------------------------------------
 # Streamlit-flow tests (G1, G3, G4) via AppTest.
 # ---------------------------------------------------------------------------
-from streamlit.testing.v1 import AppTest
-
-
 def test_g2_even_turn_secret_stays_numeric_end_to_end():
     # G2 (the real reproduction): the glitch only appeared on even-numbered
     # turns, when app.py used to stringify the secret and check_guess then
     # compared lexicographically. We pin the secret, burn one (odd) guess, then
     # on the second (even) guess submit a value that is numerically LOWER but
-    # lexicographically HIGHER than the secret. Old code -> "Go HIGHER" (wrong);
+    # lexically HIGHER than the secret. Old code -> "Go HIGHER" (wrong);
     # fixed code -> "Go LOWER".
     at = AppTest.from_file(APP).run()
     at.session_state["secret"] = 50
     at.run()
 
-    # Guess 1 (attempts -> 1, odd): any wrong guess to advance the turn counter.
+    # Guess 1 (attempts -> 1, odd): any wrong guess to advance the turn.
     at.text_input[0].set_value("99")
     next(b for b in at.button if b.label.startswith("Submit")).click().run()
 
-    # Guess 2 (attempts -> 2, even): 9 < 50 numerically, but "9" > "50" as text.
+    # Guess 2 (attempts -> 2, even): 9 < 50, but "9" > "50" as text.
     at.text_input[0].set_value("9")
     next(b for b in at.button if b.label.startswith("Submit")).click().run()
 
@@ -132,3 +126,91 @@ def test_g3_new_game_resets_all_state():
     assert at.session_state["history"] == []
     low, high = get_range_for_difficulty("Normal")
     assert low <= at.session_state["secret"] <= high
+
+
+# ===========================================================================
+# EDGE CASES
+# These challenge the code at the margins the original author overlooked.
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Edge case 1 + 2 (logic): parse_guess must reject out-of-range numbers when a
+# range is supplied. The UI advertises a range, so the parser must enforce it.
+# ---------------------------------------------------------------------------
+def test_ec_parse_guess_rejects_negative():
+    ok, value, err = parse_guess("-5", 1, 100)
+    assert ok is False
+    assert value is None
+    assert "between 1 and 100" in err
+
+
+def test_ec_parse_guess_rejects_zero_below_range():
+    ok, _value, _err = parse_guess("0", 1, 20)
+    assert ok is False
+
+
+def test_ec_parse_guess_rejects_above_range():
+    ok, _value, _err = parse_guess("150", 1, 100)
+    assert ok is False
+
+
+def test_ec_parse_guess_accepts_range_boundaries():
+    # The boundaries themselves are valid (inclusive range).
+    assert parse_guess("1", 1, 20)[0] is True
+    assert parse_guess("20", 1, 20)[0] is True
+
+
+def test_ec_parse_guess_backward_compatible_without_range():
+    # With no range supplied, behavior is unchanged for existing callers.
+    ok, value, _err = parse_guess("9999")
+    assert ok is True
+    assert value == 9999
+
+
+# ---------------------------------------------------------------------------
+# Edge case 1 (flow): an invalid or out-of-range submission must NOT consume an
+# attempt or land in history.
+# ---------------------------------------------------------------------------
+def test_ec_non_numeric_submission_does_not_consume_attempt():
+    at = AppTest.from_file(APP).run()
+    assert at.session_state["attempts"] == 0
+    at.text_input[0].set_value("abc")
+    next(b for b in at.button if b.label.startswith("Submit")).click().run()
+    assert at.session_state["attempts"] == 0
+    assert at.session_state["history"] == []
+
+
+def test_ec_out_of_range_submission_does_not_consume_attempt():
+    at = AppTest.from_file(APP).run()  # Normal: 1-100
+    at.text_input[0].set_value("-5")
+    next(b for b in at.button if b.label.startswith("Submit")).click().run()
+    assert at.session_state["attempts"] == 0
+    assert at.session_state["history"] == []
+
+
+def test_ec_valid_submission_consumes_exactly_one_attempt():
+    at = AppTest.from_file(APP).run()
+    at.session_state["secret"] = 50
+    at.run()
+    at.text_input[0].set_value("40")
+    next(b for b in at.button if b.label.startswith("Submit")).click().run()
+    assert at.session_state["attempts"] == 1
+    assert at.session_state["history"] == [40]
+
+
+# ---------------------------------------------------------------------------
+# Edge case 3 (flow): changing difficulty mid-game must not leave a stale
+# secret outside the new range; it starts a fresh game in the new range.
+# ---------------------------------------------------------------------------
+def test_ec_difficulty_change_regenerates_secret_in_range():
+    at = AppTest.from_file(APP).run()        # Normal: 1-100
+    at.session_state["secret"] = 99  # legal on Normal, impossible on Easy
+    at.session_state["attempts"] = 3
+    at.run()
+
+    at.selectbox[0].set_value("Easy").run()  # Easy: 1-20
+
+    low, high = get_range_for_difficulty("Easy")
+    assert low <= at.session_state["secret"] <= high
+    assert at.session_state["attempts"] == 0
+    assert at.session_state["status"] == "playing"
