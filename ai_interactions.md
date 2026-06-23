@@ -10,15 +10,46 @@
 
 **What task did you give the agent?**
 
-<!-- Describe the goal you asked the agent to accomplish -->
+I asked it to add an impressive, meaningful new feature that dramatically
+changes how the game plays — a real tool for the player — without breaking the
+existing logic or tests, and with the behavior kept unambiguous. We settled on
+a **Strategy Coach**: a live panel that narrows the still-possible range as you
+guess, shows how much of the search space you've ruled out, and (opt-in)
+suggests the optimal next guess.
 
 **What did the agent do?**
 
-<!-- List the steps the agent took (files edited, commands run, etc.) -->
+It worked in distinct, multi-step phases:
+
+1. **Planned first (Plan mode).** It proposed the feature, asked me to choose
+   between four options, and wrote a written plan I approved before any code
+   changed.
+2. **Added pure logic** to `logic_utils.py`: `narrow_range`,
+   `remaining_count`, and `optimal_guess`, each with a docstring and a
+   `FEATURE`-labeled comment.
+3. **Wired the UI** in `app.py`: a sidebar "Strategy Coach" toggle (on by
+   default) plus a nested opt-in "Show optimal next guess", and a panel using
+   `st.metric` / `st.progress` rendered only mid-game.
+4. **Wrote tests** in `tests/test_game_logic.py`: 8 unit tests (including an
+   invariant test proving the feasible range always contains the secret) and
+   1 end-to-end AppTest driving the real app.
+5. **Ran the tooling itself**: `python -m pytest` and
+   `python -m pycodestyle --max-line-length=79`, and fixed its own line-length
+   violation until both were clean (29 tests passing, 0 style violations).
 
 **What did you have to verify or fix manually?**
 
-<!-- Describe anything the agent got wrong or that required human review -->
+- I **found a bug the agent missed**: the higher/lower hints were backwards
+  ("Too High" told me to go HIGHER). It had carried this over verbatim from the
+  original code during an earlier fix. After I reported it, it fixed the
+  messages and added regression tests.
+- That bug also exposed a **flawed test** it had written earlier: a test
+  asserted on the hint's display text, which itself was buggy, so the test had
+  been passing for the wrong reason. It corrected the test to check the outcome
+  and direction together.
+- I **reviewed every diff** as it went and made several of the earlier edits
+  myself, with the agent checking my work — so the workflow was collaborative
+  review, not blind acceptance.
 
 ---
 
@@ -44,18 +75,49 @@
 **Prompt used:**
 
 ```
-<!-- Paste the prompt you gave the AI -->
+Then review my code for PEP 8 style compliance and apply recommended fixes
+to resolve formatting or naming issues.
 ```
+
+(Tool & command used: `pycodestyle` at the strict 79-character limit —
+`python3 -m pycodestyle --max-line-length=79 app.py logic_utils.py tests/test_game_logic.py conftest.py`)
 
 **Linting output before:**
 
 ```
-<!-- Paste relevant linter warnings/errors -->
+app.py:84:80: E501 line too long (80 > 79 characters)
+app.py:150:80: E501 line too long (80 > 79 characters)
+tests/test_game_logic.py:22:1: E402 module level import not at top of file
+tests/test_game_logic.py:56:80: E501 line too long (80 > 79 characters)
+tests/test_game_logic.py:62:80: E501 line too long (84 > 79 characters)
+tests/test_game_logic.py:70:1: E402 module level import not at top of file
+tests/test_game_logic.py:78:80: E501 line too long (80 > 79 characters)
+tests/test_game_logic.py:84:80: E501 line too long (80 > 79 characters)
+tests/test_game_logic.py:88:80: E501 line too long (80 > 79 characters)
+tests/test_game_logic.py:208:80: E501 line too long (80 > 79 characters)
+tests/test_game_logic.py:213:80: E501 line too long (82 > 79 characters)
 ```
+
+11 violations across two rule codes: **E501** (line too long) ×9 and
+**E402** (import not at top of file) ×2. After the fixes, the same command
+reported `0 violations`.
 
 **Changes applied:**
 
-<!-- Describe what you changed based on the AI's suggestions -->
+- **E501 (×9):** every long line was a *comment*, so each was reworded or
+  wrapped to fit 79 characters — no logic changed. Examples: shortened the G4
+  comment in `app.py:84` ("instead of a" → "not a"), replaced
+  "lexicographically" with "lexically" / "as text" in several test comments,
+  wrapped the edge-case-3 comment onto two lines, and collapsed an over-wide
+  inline-comment alignment gap to two spaces.
+- **E402 (×2):** the test file ran `sys.path` manipulation *before* its
+  imports, which pushed those imports below executable code. Fixed by moving
+  the `sys.path` responsibility into a new root **`conftest.py`** (the
+  idiomatic pytest way to make the repo root importable), then hoisting all
+  imports to the top of the test file and deleting the now-duplicate
+  `AppTest` import lower down.
+- **Verification:** all 18 tests still passed after the cleanup, confirming
+  the style fixes were behavior-preserving.
 
 ---
 
