@@ -127,15 +127,15 @@ reported `0 violations`.
 
 **Task given to both models:**
 
-<!-- Describe what you asked each model to do -->
+for app.py the hard difficulty is easier than the normal, please provide a fix/ solution for it
 
 | | Model A | Model B |
 |-|---------|---------|
-| **Model name** | | |
-| **Response summary** | | |
-| **More Pythonic?** | | |
-| **Clearer explanation?** | | |
+| **Claude Code** | | **Codex**|
+| **Change Hard to a range that is genuinely harder and matches its attempt limit. The cleanest fix: Hard = (1, 1000) with 10 attempts (needs ceil(log₂(1000)) = 10), or a simpler design like Hard = (1, 50) with 6 attempts (so optimal play can just barely win).** | | **app.py gets its difficulty range from [logic_utils.py (line 20)](/Users/kylemitchell/ai110-module1show-gameglitchinvestigator-starter/logic_utils.py:20), so I changed Hard from 1–50 to 1–200. Normal stays 1–100, and Hard still only allows 5 attempts, so it now actually plays harder.**|
+| **Somewhat Pythonic** | | **Pythonic solution**|
+| **Explanation Needs Work** | | **Clearest Explanation**|
 
 **Which did you prefer and why?**
 
-<!-- Your conclusion -->
+**I prefer Claude Code because the plan it produced satisfied my request, thoroughly explained the issue and how to fix it. I also like that it identified and fixed a bug that would have been in the code after applying the fix.**

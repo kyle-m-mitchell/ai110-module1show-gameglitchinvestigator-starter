@@ -29,10 +29,11 @@ You store the variable and keep it from resetting by using session state. Stream
 ## 📝 Document Your Experience
 
 - [ ] Describe the game's purpose. 
-   The purpose of the game is to guess a secret number between a set range of values (determined by the games overall difficulty setting.)
+   **The purpose of the game is to guess a secret number between a set range of values (determined by the games overall difficulty setting.)**
 - [ ] Detail which bugs you found.
+**I mostly found bugs within the logic of the game.**
 - [ ] Explain what fixes you applied.
-
+**I applied fixes that enhances the logic, quality, and gaming experience for a "Guess the Number" game. 
 ## 📸 Demo Walkthrough
 
 Describe your fixed game in numbered steps so a reader can follow along without watching a video:
@@ -43,7 +44,9 @@ Describe your fixed game in numbered steps so a reader can follow along without 
 4. Score and attempts update after each guess
 5. Game ends after the correct guess or when out of attempts
 
-**Screenshot** *(optional)*: <!-- Insert a screenshot of your fixed, winning game here -->
+**Screenshot:**
+
+<img src="assets/screenshot.png" width="700" alt="Game Glitch Investigator — fixed and running" />
 
 ## 🧪 Test Results
 
@@ -52,11 +55,11 @@ Describe your fixed game in numbered steps so a reader can follow along without 
 platform darwin -- Python 3.14.5, pytest-9.0.3, pluggy-1.6.0
 rootdir: /Users/kylemitchell/ai110-module1show-gameglitchinvestigator-starter
 plugins: anyio-4.13.0
-collected 29 items
+collected 43 items
 
-tests/test_game_logic.py .............................            [100%]
+tests/test_game_logic.py ............................................ [100%]
 
-=========================== 29 passed in 2.15s ===========================
+=========================== 43 passed in 2.21s ===========================
 ```
 
 ## 🚀 Stretch Features
@@ -101,4 +104,6 @@ AppTest UI flows) still passes, so behavior is unchanged.
 - [`style.css`](style.css) — the full custom UI layer
 - [`app.py`](app.py) — loads the CSS, renders the hero, guess chips, and footer
 
-**Screenshot** *(optional)*: <!-- Insert a screenshot of the redesigned game here -->
+**Screenshot:**
+
+<img src="assets/screenshot.png" width="700" alt="Enhanced UI — indigo palette, hero header, Strategy Coach" />
